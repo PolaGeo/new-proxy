@@ -6,6 +6,7 @@ export type ProxyErrorKind =
   | "timeout"
   | "unsupported"
   | "blocked"
+  | "ratelimited"
   | "unknown";
 
 interface ErrorStateProps {
@@ -44,6 +45,11 @@ const COPY: Record<
     title: "That address isn't allowed",
     detail:
       "The target host or port is outside the proxy's allowed list, so the request was refused.",
+  },
+  ratelimited: {
+    title: "The site is limiting the proxy",
+    detail:
+      "The site answered with 'too many requests' because it blocks traffic from the proxy's network. Waiting a while and trying again may help; some sites will not load through the proxy at all.",
   },
   unknown: {
     title: "Something went wrong",

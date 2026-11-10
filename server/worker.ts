@@ -21,10 +21,25 @@ const SESSION_COOKIE = "veil_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 365;
 const MAX_REDIRECTS = 10;
 
+interface Visit {
+  request: Request;
+  env: ProxyEnv;
+  sessionId: string;
+  jar: CookieJar;
+  prefetch: boolean;
+}
+
+interface Hop {
+  target: URL;
+  method: "GET" | "POST";
+  body?: ArrayBuffer;
+  redirects: number;
+}
+
 export default {
   async fetch(request: Request, env: ProxyEnv): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === PROXY_PATH && request.method === "GET") {
+    if (url.pathname === PROXY_PATH && (request.method === "GET" || request.method === "POST")) {
       return handleProxy(request, url, env);
     }
     return env.ASSETS.fetch(request);
@@ -41,18 +56,16 @@ async function handleProxy(request: Request, url: URL, env: ProxyEnv): Promise<R
 
   const sessionId = getSessionId(request);
   const jar = await getCookieJar(env, sessionId);
-  return fetchTarget(request, env, check.url, sessionId, jar, prefetch, 0);
+  const body = request.method === "POST" ? await request.arrayBuffer() : undefined;
+  return fetchTarget(
+    { request, env, sessionId, jar, prefetch },
+    { target: check.url, method: request.method as "GET" | "POST", body, redirects: 0 }
+  );
 }
 
-async function fetchTarget(
-  request: Request,
-  env: ProxyEnv,
-  target: URL,
-  sessionId: string,
-  jar: CookieJar,
-  prefetch: boolean,
-  redirects: number
-): Promise<Response> {
+async function fetchTarget(visit: Visit, hop: Hop): Promise<Response> {
+  const { request, env, sessionId, jar, prefetch } = visit;
+  const { target, method, body, redirects } = hop;
   if (redirects > MAX_REDIRECTS) {
     return proxyError(prefetch, "unreachable", target.href, "Too many redirects");
   }
@@ -60,12 +73,18 @@ async function fetchTarget(
   const upstreamHeaders = buildTargetHeaders(target, request.headers);
   const cookies = cookieHeaderFor(jar, target);
   if (cookies) upstreamHeaders["Cookie"] = cookies;
+  if (body) {
+    upstreamHeaders["Content-Type"] =
+      request.headers.get("content-type") ?? "application/x-www-form-urlencoded";
+    upstreamHeaders["Origin"] = target.origin;
+  }
 
   let upstream: Response;
   try {
     upstream = await fetch(target.href, {
-      method: "GET",
+      method,
       headers: upstreamHeaders,
+      body,
       redirect: "manual",
       signal: AbortSignal.timeout(config.timeout),
     });
@@ -94,8 +113,18 @@ async function fetchTarget(
       if (!nextCheck.ok) {
         return proxyError(prefetch, nextCheck.reason === "blocked" ? "blocked" : "invalid", nextUrl.href);
       }
-      return fetchTarget(request, env, nextCheck.url, sessionId, jar, prefetch, redirects + 1);
+      const keepsBody = status === 307 || status === 308;
+      return fetchTarget(visit, {
+        target: nextCheck.url,
+        method: keepsBody ? method : "GET",
+        body: keepsBody ? body : undefined,
+        redirects: redirects + 1,
+      });
     }
+  }
+
+  if (status === 429) {
+    return proxyError(prefetch, "ratelimited", target.href);
   }
 
   if (prefetch) {
@@ -121,12 +150,12 @@ async function fetchTarget(
     return withSessionCookie(new Response(bytes, { status, headers }), sessionId);
   }
 
-  const body = new TextDecoder().decode(bytes);
+  const text = new TextDecoder().decode(bytes);
   let rewritten: string;
   if (isHtmlType(contentType)) {
-    rewritten = injectClientScript(rewriteHtml(body, target));
+    rewritten = injectClientScript(rewriteHtml(text, target));
   } else if (contentType.toLowerCase().includes("text/css")) {
-    rewritten = rewriteCss(body, target);
+    rewritten = rewriteCss(text, target);
   } else {
     return withSessionCookie(new Response(bytes, { status, headers }), sessionId);
   }

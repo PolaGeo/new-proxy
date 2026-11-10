@@ -6,6 +6,7 @@ const TITLES: Record<string, string> = {
   timeout: "The site took too long",
   unsupported: "Can't display that here",
   blocked: "That address isn't allowed",
+  ratelimited: "The site is limiting the proxy",
   invalid: "That address isn't valid",
   unknown: "Something went wrong",
 };
@@ -16,6 +17,7 @@ const DETAILS: Record<string, string> = {
   timeout: "The request timed out before the site responded. Sometimes a second attempt works.",
   unsupported: "The site returned a type of content the proxy can't show in the browser.",
   blocked: "The target host or port is outside the proxy's allowed list.",
+  ratelimited: "The site answered with 'too many requests' because it blocks traffic from the proxy's network. Waiting a while and trying again may help; some sites will not load through the proxy at all.",
   invalid: "The URL you entered doesn't look like a valid web address.",
   unknown: "An unexpected error happened while loading the site. Please try again.",
 };

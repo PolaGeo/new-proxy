@@ -77,6 +77,8 @@ function mapErrorKind(kind: string): ProxyErrorKind {
       return "unsupported";
     case "blocked":
       return "blocked";
+    case "ratelimited":
+      return "ratelimited";
     default:
       return "unknown";
   }

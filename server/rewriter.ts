@@ -426,29 +426,30 @@ const CLIENT_SCRIPT = `
   document.addEventListener("click", function(e) {
     var a = e.target;
     while (a && a.tagName !== "A") a = a.parentNode;
-    if (a && a.href) {
-      var abs = a.href;
-      if (abs && abs.indexOf(P + "?url=") === -1 && abs.indexOf("http") === 0) {
-        e.preventDefault();
-        location.href = toProxy(abs);
-      }
+    var raw = a ? a.getAttribute("href") : null;
+    if (raw && !isUnproxiable(raw)) {
+      e.preventDefault();
+      location.href = toProxy(raw);
     }
   }, true);
 
+  function isUnproxiable(u) {
+    return u.charAt(0) === "#" || u.indexOf("javascript:") === 0 || u.indexOf("data:") === 0 || u.indexOf("blob:") === 0 || u.indexOf("mailto:") === 0 || u.indexOf("tel:") === 0 || u.indexOf(P + "?url=") === 0 || u.indexOf(ORIGIN + P + "?url=") === 0;
+  }
+
   // --- form submissions --------------------------------------------------
+  function rewriteFormAction(f) {
+    var raw = f.getAttribute("action");
+    if (raw) f.setAttribute("action", toProxy(raw));
+  }
   document.addEventListener("submit", function(e) {
-    var f = e.target;
-    if (f && f.tagName === "FORM" && f.action) {
-      var abs = f.action;
-      if (abs && abs.indexOf(P + "?url=") === -1 && abs.indexOf("http") === 0) {
-        e.preventDefault();
-        f.action = toProxy(abs);
-        // Re-dispatch the submit so the browser picks up the new action
-        var ev = new Event("submit", { bubbles: true, cancelable: true });
-        f.dispatchEvent(ev);
-      }
-    }
+    if (e.target && e.target.tagName === "FORM") rewriteFormAction(e.target);
   }, true);
+  var origFormSubmit = HTMLFormElement.prototype.submit;
+  HTMLFormElement.prototype.submit = function() {
+    rewriteFormAction(this);
+    return origFormSubmit.call(this);
+  };
 
   // --- History API (pushState/replaceState) ------------------------------
   var origPush = history.pushState;

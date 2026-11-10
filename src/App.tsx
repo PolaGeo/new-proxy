@@ -188,7 +188,7 @@ function App() {
             src={buildProxyUrl(state.target)}
             title="Proxied content"
             className="h-full w-full flex-1 border-0 bg-white"
-            sandbox="allow-scripts allow-forms allow-popups allow-same-origin allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-forms allow-downloads allow-popups allow-same-origin allow-popups-to-escape-sandbox"
           />
         )}
       </main>
